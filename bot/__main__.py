@@ -45,17 +45,20 @@ def stats(update, context):
     mem_a = get_readable_file_size(memory.available)
     mem_u = get_readable_file_size(memory.used)
     stats = f'<b>Commit Date:</b> {last_commit}\n\n'\
+            f'<b>🔴🔴🔴🔴</b>  | <b>🟣🟣🟣🟣</b> \n\n'\
             f'<b>Bot Uptime:</b> {currentTime}\n'\
             f'<b>OS Uptime:</b> {osUptime}\n\n'\
             f'<b>Total Disk Space:</b> {total}\n'\
             f'<b>Used:</b> {used} | <b>Free:</b> {free}\n\n'\
             f'<b>Upload:</b> {sent}\n'\
             f'<b>Download:</b> {recv}\n\n'\
+            f'<b>🔴🔴🔴🔴</b>  | <b>🟣🟣🟣🟣</b> \n\n'\
             f'<b>CPU:</b> {cpuUsage}%\n'\
             f'<b>RAM:</b> {mem_p}%\n'\
             f'<b>DISK:</b> {disk}%\n\n'\
             f'<b>Physical Cores:</b> {p_core}\n'\
             f'<b>Total Cores:</b> {t_core}\n\n'\
+            f'<b>🔴🔴🔴🔴</b>  | <b>🟣🟣🟣🟣</b> \n\n'\
             f'<b>SWAP:</b> {swap_t} | <b>Used:</b> {swap_p}%\n'\
             f'<b>Memory Total:</b> {mem_t}\n'\
             f'<b>Memory Free:</b> {mem_a}\n'\
@@ -65,12 +68,12 @@ def stats(update, context):
 
 def start(update, context):
     buttons = ButtonMaker()
-    buttons.buildbutton("Repo", "https://www.github.com/anasty17/mirror-leech-telegram-bot")
-    buttons.buildbutton("Owner", "https://www.github.com/anasty17")
+    buttons.buildbutton("Repo", "https://www.istockphoto.com/vector/funny-lol-monkey-big-laugh-gm1253262823-365946427")
+    buttons.buildbutton("Owner", "https://www.comingsoon.net/tv/news/1214991-daredevil-mcu-reboot-reportedly-in-development")
     reply_markup = InlineKeyboardMarkup(buttons.build_menu(2))
     if CustomFilters.authorized_user(update) or CustomFilters.authorized_chat(update):
         start_string = f'''
-This bot can mirror all your links to Google Drive or to telegram!
+This bot do nothing!
 Type /{BotCommands.HelpCommand} to get a list of available commands
 '''
         sendMarkup(start_string, context.bot, update.message, reply_markup)
@@ -189,7 +192,7 @@ help_string = f'''
 
 /{BotCommands.AddSudoCommand}: Add sudo user (Only Owner)
 
-/{BotCommands.RmSudoCommand}: Remove sudo users (Only Owner)
+/{BotCommands.RmSudoCommand}: Remove sudo users (Only Daredvil)
 
 /{BotCommands.RestartCommand}: Restart and update the bot
 
