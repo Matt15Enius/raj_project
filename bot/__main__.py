@@ -70,12 +70,12 @@ def stats(update, context):
 
 def start(update, context):
     buttons = ButtonMaker()
-    buttons.buildbutton("Repo", "https://www.github.com/anasty17/mirror-leech-telegram-bot")
-    buttons.buildbutton("Owner", "https://www.github.com/anasty17")
+    buttons.buildbutton("Repo", "https://www.istockphoto.com/vector/funny-lol-monkey-big-laugh-gm1253262823-365946427")
+    buttons.buildbutton("Owner", "https://www.comingsoon.net/tv/news/1214991-daredevil-mcu-reboot-reportedly-in-development")
     reply_markup = InlineKeyboardMarkup(buttons.build_menu(2))
     if CustomFilters.authorized_user(update) or CustomFilters.authorized_chat(update):
         start_string = f'''
-This bot can mirror all your links to Google Drive or to telegram!
+This bot can waste your time! So pls get lost & deploy your own bot
 Type /{BotCommands.HelpCommand} to get a list of available commands
 '''
         sendMarkup(start_string, context.bot, update.message, reply_markup)
