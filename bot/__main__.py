@@ -1,4 +1,4 @@
-from signal import signal, SIGINT
+   from signal import signal, SIGINT
 from os import path as ospath, remove as osremove, execl as osexecl
 from subprocess import run as srun, check_output
 from psutil import disk_usage, cpu_percent, swap_memory, cpu_count, virtual_memory, net_io_counters, boot_time
@@ -7,7 +7,7 @@ from sys import executable
 from telegram import InlineKeyboardMarkup
 from telegram.ext import CommandHandler
 
-from bot import bot, dispatcher, updater, botStartTime, IGNORE_PENDING_REQUESTS, LOGGER, Interval, INCOMPLETE_TASK_NOTIFIER, DB_URI, alive, app, main_loop
+from bot import bot, dispatcher, updater, botStartTime, IGNORE_PENDING_REQUESTS, LOGGER, Interval, INCOMPLETE_TASK_NOTIFIER, DB_URI, alive, app, main_loop, HEROKU_API_KEY, HEROKU_APP_NAME
 from .helper.ext_utils.fs_utils import start_cleanup, clean_all, exit_clean_up
 from .helper.ext_utils.telegraph_helper import telegraph
 from .helper.ext_utils.bot_utils import get_readable_file_size, get_readable_time
@@ -16,17 +16,16 @@ from .helper.telegram_helper.bot_commands import BotCommands
 from .helper.telegram_helper.message_utils import sendMessage, sendMarkup, editMessage, sendLogFile
 from .helper.telegram_helper.filters import CustomFilters
 from .helper.telegram_helper.button_build import ButtonMaker
-
-from .modules import authorize, list, cancel_mirror, mirror_status, mirror, clone, watch, shell, eval, delete, count, leech_settings, search, rss, qbselect
+from .helper.ext_utils.heroku_helper import getHerokuDetails
+from .modules import authorize, list, cancel_mirror, mirror_status, mirror, clone, watch, shell, eval, delete, count, leech_settings, search, rss
 
 
 def stats(update, context):
     if ospath.exists('.git'):
-        last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd <b>From</b> %cr'"], shell=True).decode()
+        last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \n<b>From</b> %cr'"], shell=True).decode()
     else:
         last_commit = 'No UPSTREAM_REPO'
     currentTime = get_readable_time(time() - botStartTime)
-    osUptime = get_readable_time(time() - boot_time())
     total, used, free, disk= disk_usage('/')
     total = get_readable_file_size(total)
     used = get_readable_file_size(used)
@@ -34,11 +33,6 @@ def stats(update, context):
     sent = get_readable_file_size(net_io_counters().bytes_sent)
     recv = get_readable_file_size(net_io_counters().bytes_recv)
     cpuUsage = cpu_percent(interval=0.5)
-    p_core = cpu_count(logical=False)
-    t_core = cpu_count(logical=True)
-    swap = swap_memory()
-    swap_p = swap.percent
-    swap_t = get_readable_file_size(swap.total)
     memory = virtual_memory()
     mem_p = memory.percent
     mem_t = get_readable_file_size(memory.total)
@@ -46,23 +40,22 @@ def stats(update, context):
     mem_u = get_readable_file_size(memory.used)
     stats = f'<b>Commit Date:</b> {last_commit}\n\n'\
             f'<b>🔴🔴🔴🔴</b>  | <b>🟣🟣🟣🟣</b> \n\n'\
-            f'<b>Bot Uptime:</b> {currentTime}\n'\
-            f'<b>OS Uptime:</b> {osUptime}\n\n'\
+            f'<b>Bot Uptime:</b> {currentTime}\n\n'\
+            f'<b>🔴🔴🔴🔴</b>  | <b>🟣🟣🟣🟣</b> \n\n'\        
             f'<b>Total Disk Space:</b> {total}\n'\
             f'<b>Used:</b> {used} | <b>Free:</b> {free}\n\n'\
-            f'<b>Upload:</b> {sent}\n'\
-            f'<b>Download:</b> {recv}\n\n'\
+            f'<b>Up:</b> {sent} | '\
+            f'<b>Down:</b> {recv}\n\n'\
             f'<b>🔴🔴🔴🔴</b>  | <b>🟣🟣🟣🟣</b> \n\n'\
-            f'<b>CPU:</b> {cpuUsage}%\n'\
-            f'<b>RAM:</b> {mem_p}%\n'\
+            f'<b>CPU:</b> {cpuUsage}% | '\
+            f'<b>RAM:</b> {mem_p}% | '\
             f'<b>DISK:</b> {disk}%\n\n'\
-            f'<b>Physical Cores:</b> {p_core}\n'\
-            f'<b>Total Cores:</b> {t_core}\n\n'\
             f'<b>🔴🔴🔴🔴</b>  | <b>🟣🟣🟣🟣</b> \n\n'\
-            f'<b>SWAP:</b> {swap_t} | <b>Used:</b> {swap_p}%\n'\
-            f'<b>Memory Total:</b> {mem_t}\n'\
-            f'<b>Memory Free:</b> {mem_a}\n'\
-            f'<b>Memory Used:</b> {mem_u}\n'
+            f'<b>Total Memory:</b> {mem_t}\n'\
+            f'<b>Free:</b> {mem_a} | '\
+            f'<b>Used:</b> {mem_u}\n\n'
+    heroku = getHerokuDetails(HEROKU_API_KEY, HEROKU_APP_NAME)
+    if heroku: stats += heroku
     sendMessage(stats, context.bot, update.message)
 
 
@@ -73,23 +66,22 @@ def start(update, context):
     reply_markup = InlineKeyboardMarkup(buttons.build_menu(2))
     if CustomFilters.authorized_user(update) or CustomFilters.authorized_chat(update):
         start_string = f'''
-This bot do nothing!
+This bot do nothing so don't waste your time!
 Type /{BotCommands.HelpCommand} to get a list of available commands
 '''
         sendMarkup(start_string, context.bot, update.message, reply_markup)
     else:
-        sendMarkup('Not an Authorized user, deploy your own mirror-leech bot', context.bot, update.message, reply_markup)
+        sendMarkup('Not Authorized user of the Daredevil world, deploy your own mirror-leech bot', context.bot, update.message, reply_markup)
 
 def restart(update, context):
     restart_message = sendMessage("Restarting...", context.bot, update.message)
     if Interval:
         Interval[0].cancel()
-        Interval.clear()
     alive.kill()
     clean_all()
     srun(["pkill", "-9", "-f", "gunicorn|extra-api|last-api|megasdkrest|new-api"])
     srun(["python3", "update.py"])
-    with open(".restartmsg", "w") as f:
+    with open(".restartmsg", "w") as f: 
         f.truncate(0)
         f.write(f"{restart_message.chat.id}\n{restart_message.message_id}\n")
     osexecl(executable, executable, "-m", "bot")
@@ -115,7 +107,7 @@ help_string_telegraph = f'''<br>
 <br><br>
 <b>/{BotCommands.UnzipMirrorCommand}</b> [download_url][magnet_link]: Start mirroring and upload the file/folder extracted from any archive extension
 <br><br>
-<b>/{BotCommands.QbMirrorCommand}</b> [magnet_link][torrent_file][torrent_file_url]: Start Mirroring using qBittorrent, Use `<b>/{BotCommands.QbMirrorCommand} s</b>` to select files before downloading and use `<b>/{BotCommands.QbMirrorCommand} d</b>` to seed specific torrent and those two args works with all qb commands
+<b>/{BotCommands.QbMirrorCommand}</b> [magnet_link][torrent_file][torrent_file_url]: Start Mirroring using qBittorrent, Use <b>/{BotCommands.QbMirrorCommand} s</b> to select files before downloading
 <br><br>
 <b>/{BotCommands.QbZipMirrorCommand}</b> [magnet_link][torrent_file][torrent_file_url]: Start mirroring using qBittorrent and upload the file/folder compressed with zip extension
 <br><br>
@@ -151,8 +143,6 @@ help_string_telegraph = f'''<br>
 <br><br>
 <b>/{BotCommands.SetThumbCommand}</b>: Reply photo to set it as Thumbnail
 <br><br>
-<b>/{BotCommands.QbSelectCommand}</b>: Reply to an active /qbcmd which was used to start the qb-download or add gid along with cmd. This command mainly for selection incase you decided to select files from already added qb-torrent. But you can always use /qbcmd with arg `s` to select files before download start
-<br><br>
 <b>/{BotCommands.RssListCommand}</b>: List all subscribed rss feed info
 <br><br>
 <b>/{BotCommands.RssGetCommand}</b>: [Title] [Number](last N links): Force fetch last N links
@@ -176,32 +166,43 @@ help_string_telegraph = f'''<br>
 <b>/{BotCommands.StatsCommand}</b>: Show Stats of the machine the bot is hosted on
 '''
 
-help = telegraph.create_page(
-        title='Mirror-Leech-Bot Help',
-        content=help_string_telegraph,
-    )["path"]
 
-help_string = f'''
-/{BotCommands.PingCommand}: Check how long it takes to Ping the Bot
-
-/{BotCommands.AuthorizeCommand}: Authorize a chat or a user to use the bot (Can only be invoked by Owner & Sudo of the bot)
-
-/{BotCommands.UnAuthorizeCommand}: Unauthorize a chat or a user to use the bot (Can only be invoked by Owner & Sudo of the bot)
-
-/{BotCommands.AuthorizedUsersCommand}: Show authorized users (Only Owner & Sudo)
-
-/{BotCommands.AddSudoCommand}: Add sudo user (Only Owner)
-
-/{BotCommands.RmSudoCommand}: Remove sudo users (Only Daredvil)
-
-/{BotCommands.RestartCommand}: Restart and update the bot
-
-/{BotCommands.LogCommand}: Get a log file of the bot. Handy for getting crash reports
+sudo_help_string = f'''<br><br><b> Sudo/Daredevil Only Commands </b><br><br>
+<b>/{BotCommands.PingCommand}</b>: Check how long it takes to Ping the Bot
+<br><br>
+<b>/{BotCommands.AuthorizeCommand}</b>: Authorize a chat or a user to use the bot (Can only be invoked by Daredevil & Sudo of the bot)
+<br><br>
+<b>/{BotCommands.UnAuthorizeCommand}</b>: Unauthorize a chat or a user to use the bot (Can only be invoked by Daredevil & Sudo of the bot)
+<br><br>
+<b>/{BotCommands.AuthorizedUsersCommand}</b>: Show authorized users (Only Daredevil & Sudo)
+<br><br>
+<b>/{BotCommands.AddSudoCommand}</b>: Add sudo user (Only Daredevil)
+<br><br>
+<b>/{BotCommands.RmSudoCommand}</b>: Remove sudo users (Only Daredevil)
+<br><br>
+<b>/{BotCommands.RestartCommand}</b>: Restart and update the bot
+<br><br>
+<b>/{BotCommands.LogCommand}</b>: Get a log file of the bot. Handy for getting crash reports
+<br><br>
+<b>/{BotCommands.ShellCommand}</b>: Run commands in Shell (Only Daredevil)
+<br><br>
+<b>/{BotCommands.ExecHelpCommand}</b>: Get help for Executor module (Only Daredevil)
+<br><br>
+<b>/{BotCommands.AddleechlogCommand}</b>: Add Leech Log
+<br><br>
+<b>/{BotCommands.RmleechlogCommand}</b>: Remove Leech Log
 '''
+help_string = f'''
+Hei, Need Help!!
+'''
+help = telegraph.create_page(
+        title='Helios-Mirror Help',
+        content=help_string_telegraph + sudo_help_string,
+    )["path"]
 
 def bot_help(update, context):
     button = ButtonMaker()
-    button.buildbutton("Other Commands", f"https://telegra.ph/{help}")
+    button.buildbutton("Click Here", f"https://telegra.ph/{help}")
     reply_markup = InlineKeyboardMarkup(button.build_menu(1))
     sendMarkup(help_string, context.bot, update.message, reply_markup)
 
@@ -226,19 +227,13 @@ def main():
                                  bot.editMessageText(msg, chat_id, msg_id, parse_mode='HTMl', disable_web_page_preview=True)
                                  osremove(".restartmsg")
                              else:
-                                 try:
-                                     bot.sendMessage(cid, msg, 'HTML')
-                                 except Exception as e:
-                                     LOGGER.error(e)
+                                 bot.sendMessage(cid, msg, 'HTML')
                              msg = ''
                 if 'Restarted successfully!' in msg and cid == chat_id:
                      bot.editMessageText(msg, chat_id, msg_id, parse_mode='HTMl', disable_web_page_preview=True)
                      osremove(".restartmsg")
                 else:
-                    try:
-                        bot.sendMessage(cid, msg, 'HTML')
-                    except Exception as e:
-                        LOGGER.error(e)
+                    bot.sendMessage(cid, msg, 'HTML')
 
     if ospath.isfile(".restartmsg"):
         with open(".restartmsg") as f:
@@ -266,7 +261,5 @@ def main():
     LOGGER.info("Bot Started!")
     signal(SIGINT, exit_clean_up)
 
-app.start()
 main()
-
-main_loop.run_forever()
+app.start()
