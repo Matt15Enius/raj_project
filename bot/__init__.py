@@ -29,6 +29,22 @@ basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 
 LOGGER = getLogger(__name__)
 
+CONFIG_FILE_URL = environ.get('CONFIG_FILE_URL')
+try:
+    if len(CONFIG_FILE_URL) == 0:
+        raise TypeError
+    try:
+        res = rget(CONFIG_FILE_URL)
+        if res.status_code == 200:
+            with open('config.env', 'wb+') as f:
+                f.write(res.content)
+        else:
+            log_error(f"Failed to download config.env {res.status_code}")
+    except Exception as e:
+        log_error(f"CONFIG_FILE_URL: {e}")
+except:
+    pass
+
 load_dotenv('config.env', override=True)
 
 def getConfig(name: str):
@@ -59,18 +75,18 @@ except:
     TORRENT_TIMEOUT = None
 
 PORT = environ.get('PORT')
-Popen(f"gunicorn web.wserver:app --bind 0.0.0.0:{PORT}", shell=True)
+Popen([f"gunicorn web.wserver:app --bind 0.0.0.0:{PORT}"], shell=True)
 srun(["last-api", "-d", "--profile=."])
 if not ospath.exists('.netrc'):
     srun(["touch", ".netrc"])
 srun(["cp", ".netrc", "/root/.netrc"])
 srun(["chmod", "600", ".netrc"])
-trackers = check_output("curl -Ns https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/all.txt https://ngosang.github.io/trackerslist/trackers_all_http.txt https://newtrackon.com/api/all https://raw.githubusercontent.com/hezhijie0327/Trackerslist/main/trackerslist_tracker.txt | awk '$0' | tr '\n\n' ','", shell=True).decode('utf-8').rstrip(',')
+trackers = check_output(["curl -Ns https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/all.txt https://ngosang.github.io/trackerslist/trackers_all_http.txt https://newtrackon.com/api/all https://raw.githubusercontent.com/hezhijie0327/Trackerslist/main/trackerslist_tracker.txt | awk '$0' | tr '\n\n' ','"], shell=True).decode('utf-8').rstrip(',')
 if TORRENT_TIMEOUT is not None:
     with open("a2c.conf", "a+") as a:
         a.write(f"bt-stop-timeout={TORRENT_TIMEOUT}\n")
 with open("a2c.conf", "a+") as a:
-    a.write(f"bt-tracker=[{trackers}]")
+    a.write(f"bt-tracker={trackers}")
 srun(["extra-api", "--conf-path=/usr/src/app/a2c.conf"])
 alive = Popen(["python3", "alive.py"])
 sleep(0.5)
@@ -117,28 +133,43 @@ AUTHORIZED_CHATS = set()
 SUDO_USERS = set()
 AS_DOC_USERS = set()
 AS_MEDIA_USERS = set()
-EXTENSION_FILTER = set()
-
+EXTENTION_FILTER = set(['.torrent'])
+LEECH_LOG = set()
+MIRROR_LOGS = set()
 try:
     aid = getConfig('AUTHORIZED_CHATS')
-    aid = aid.split()
+    aid = aid.split(' ')
     for _id in aid:
-        AUTHORIZED_CHATS.add(int(_id.strip()))
+        AUTHORIZED_CHATS.add(int(_id))
 except:
     pass
 try:
     aid = getConfig('SUDO_USERS')
-    aid = aid.split()
+    aid = aid.split(' ')
     for _id in aid:
-        SUDO_USERS.add(int(_id.strip()))
+        SUDO_USERS.add(int(_id))
 except:
     pass
 try:
-    fx = getConfig('EXTENSION_FILTER')
+    fx = getConfig('EXTENTION_FILTER')
     if len(fx) > 0:
-        fx = fx.split()
+        fx = fx.split(' ')
         for x in fx:
-            EXTENSION_FILTER.add(x.strip().lower())
+            EXTENTION_FILTER.add(x.lower())
+except:
+    pass
+try:
+    aid = getConfig('LEECH_LOG')
+    aid = aid.split(' ')
+    for _id in aid:
+        LEECH_LOG.add(int(_id))
+except:
+    pass
+try:
+    aid = getConfig('MIRROR_LOGS')
+    aid = aid.split(' ')
+    for _id in aid:
+        MIRROR_LOGS.add(int(_id))
 except:
     pass
 try:
@@ -153,9 +184,14 @@ try:
     TELEGRAM_API = getConfig('TELEGRAM_API')
     TELEGRAM_HASH = getConfig('TELEGRAM_HASH')
 except:
-    log_error("One or more env variables missing! Exiting now")
+    LOGGER.error("One or more env variables missing! Exiting now")
     exit(1)
-
+try:
+    AUTO_DELETE_UPLOAD_MESSAGE_DURATION = int(getConfig('AUTO_DELETE_UPLOAD_MESSAGE_DURATION'))
+except KeyError as e:
+    AUTO_DELETE_UPLOAD_MESSAGE_DURATION = -1
+    LOGGER.warning("AUTO_DELETE_UPLOAD_MESSAGE_DURATION var missing!")
+    pass
 LOGGER.info("Generating BOT_SESSION_STRING")
 app = Client(name='pyrogram', api_id=int(TELEGRAM_API), api_hash=TELEGRAM_HASH, bot_token=BOT_TOKEN, parse_mode=enums.ParseMode.HTML, no_updates=True)
 
@@ -165,12 +201,13 @@ try:
         raise KeyError
     rss_session = Client(name='rss_session', api_id=int(TELEGRAM_API), api_hash=TELEGRAM_HASH, session_string=USER_SESSION_STRING, parse_mode=enums.ParseMode.HTML, no_updates=True)
 except:
+    USER_SESSION_STRING = None
     rss_session = None
 
 def aria2c_init():
     try:
         log_info("Initializing Aria2c")
-        link = "https://linuxmint.com/torrents/lmde-5-cinnamon-64bit.iso.torrent"
+        link = "https://releases.ubuntu.com/21.10/ubuntu-21.10-desktop-amd64.iso.torrent"
         dire = DOWNLOAD_DIR.rstrip("/")
         aria2.add_uris([link], {'dir': dire})
         sleep(3)
@@ -277,6 +314,41 @@ try:
 except:
     CMD_INDEX = ''
 try:
+    TORRENT_DIRECT_LIMIT = getConfig('TORRENT_DIRECT_LIMIT')
+    if len(TORRENT_DIRECT_LIMIT) == 0:
+        raise KeyError
+    TORRENT_DIRECT_LIMIT = float(TORRENT_DIRECT_LIMIT)
+except:
+    TORRENT_DIRECT_LIMIT = None
+try:
+    CLONE_LIMIT = getConfig('CLONE_LIMIT')
+    if len(CLONE_LIMIT) == 0:
+        raise KeyError
+    CLONE_LIMIT = float(CLONE_LIMIT)
+except:
+    CLONE_LIMIT = None
+try:
+    MEGA_LIMIT = getConfig('MEGA_LIMIT')
+    if len(MEGA_LIMIT) == 0:
+        raise KeyError
+    MEGA_LIMIT = float(MEGA_LIMIT)
+except:
+    MEGA_LIMIT = None
+try:
+    STORAGE_THRESHOLD = getConfig('STORAGE_THRESHOLD')
+    if len(STORAGE_THRESHOLD) == 0:
+        raise KeyError
+    STORAGE_THRESHOLD = float(STORAGE_THRESHOLD)
+except:
+    STORAGE_THRESHOLD = None
+try:
+    ZIP_UNZIP_LIMIT = getConfig('ZIP_UNZIP_LIMIT')
+    if len(ZIP_UNZIP_LIMIT) == 0:
+        raise KeyError
+    ZIP_UNZIP_LIMIT = float(ZIP_UNZIP_LIMIT)
+except:
+    ZIP_UNZIP_LIMIT = None
+try:
     RSS_CHAT_ID = getConfig('RSS_CHAT_ID')
     if len(RSS_CHAT_ID) == 0:
         raise KeyError
@@ -290,6 +362,30 @@ try:
     RSS_DELAY = int(RSS_DELAY)
 except:
     RSS_DELAY = 900
+try:
+    BUTTON_FOUR_NAME = getConfig('BUTTON_FOUR_NAME')
+    BUTTON_FOUR_URL = getConfig('BUTTON_FOUR_URL')
+    if len(BUTTON_FOUR_NAME) == 0 or len(BUTTON_FOUR_URL) == 0:
+        raise KeyError
+except:
+    BUTTON_FOUR_NAME = None
+    BUTTON_FOUR_URL = None
+try:
+    BUTTON_FIVE_NAME = getConfig('BUTTON_FIVE_NAME')
+    BUTTON_FIVE_URL = getConfig('BUTTON_FIVE_URL')
+    if len(BUTTON_FIVE_NAME) == 0 or len(BUTTON_FIVE_URL) == 0:
+        raise KeyError
+except:
+    BUTTON_FIVE_NAME = None
+    BUTTON_FIVE_URL = None
+try:
+    BUTTON_SIX_NAME = getConfig('BUTTON_SIX_NAME')
+    BUTTON_SIX_URL = getConfig('BUTTON_SIX_URL')
+    if len(BUTTON_SIX_NAME) == 0 or len(BUTTON_SIX_URL) == 0:
+        raise KeyError
+except:
+    BUTTON_SIX_NAME = None
+    BUTTON_SIX_URL = None
 try:
     INCOMPLETE_TASK_NOTIFIER = getConfig('INCOMPLETE_TASK_NOTIFIER')
     INCOMPLETE_TASK_NOTIFIER = INCOMPLETE_TASK_NOTIFIER.lower() == 'true'
@@ -320,6 +416,14 @@ try:
     WEB_PINCODE = WEB_PINCODE.lower() == 'true'
 except:
     WEB_PINCODE = False
+try:
+    SHORTENER = getConfig('SHORTENER')
+    SHORTENER_API = getConfig('SHORTENER_API')
+    if len(SHORTENER) == 0 or len(SHORTENER_API) == 0:
+        raise KeyError
+except:
+    SHORTENER = None
+    SHORTENER_API = None
 try:
     IGNORE_PENDING_REQUESTS = getConfig("IGNORE_PENDING_REQUESTS")
     IGNORE_PENDING_REQUESTS = IGNORE_PENDING_REQUESTS.lower() == 'true'
@@ -352,6 +456,60 @@ try:
         raise KeyError
 except:
     CRYPT = None
+try:
+    AUTHOR_NAME = getConfig('AUTHOR_NAME')
+    if len(AUTHOR_NAME) == 0:
+        AUTHOR_NAME = 'Arsh Sisodiya'
+except KeyError:
+    AUTHOR_NAME = 'Arsh Sisodiya'
+
+try:
+    AUTHOR_URL = getConfig('AUTHOR_URL')
+    if len(AUTHOR_URL) == 0:
+        AUTHOR_URL = 'https://t.me/heliosmirror'
+except KeyError:
+    AUTHOR_URL = 'https://t.me/heliosmirror'
+
+try:
+    GD_INFO = getConfig('GD_INFO')
+    if len(GD_INFO) == 0:
+        GD_INFO = 'Uploaded by Helios Mirror Bot'
+except KeyError:
+    GD_INFO = 'Uploaded by Helios Mirror Bot'
+
+try:
+    TITLE_NAME = getConfig('TITLE_NAME')
+    if len(TITLE_NAME) == 0:
+        TITLE_NAME = 'Helios-Mirror-Search'
+except KeyError:
+    TITLE_NAME = 'Helios-Mirror-Search'
+try:
+    SOURCE_LINK = getConfig('SOURCE_LINK')
+    SOURCE_LINK = SOURCE_LINK.lower() == 'true'
+except KeyError:
+    SOURCE_LINK = False
+try:
+    BOT_PM = getConfig('BOT_PM')
+    BOT_PM = BOT_PM.lower() == 'true'
+except KeyError:
+    BOT_PM = False
+try:
+    APPDRIVE_EMAIL = getConfig('APPDRIVE_EMAIL')
+    APPDRIVE_PASS = getConfig('APPDRIVE_PASS')
+    if len(APPDRIVE_EMAIL) == 0 or len(APPDRIVE_PASS) == 0:
+        raise KeyError
+except KeyError:
+    APPDRIVE_EMAIL = None
+    APPDRIVE_PASS = None
+try:
+    HEROKU_API_KEY = getConfig('HEROKU_API_KEY')
+    HEROKU_APP_NAME = getConfig('HEROKU_APP_NAME')
+    if len(HEROKU_API_KEY) == 0 or len(HEROKU_APP_NAME) == 0:
+        raise KeyError
+except KeyError:
+    LOGGER.warning("Heroku details not entered.")
+    HEROKU_API_KEY = None
+    HEROKU_APP_NAME = None
 try:
     TOKEN_PICKLE_URL = getConfig('TOKEN_PICKLE_URL')
     if len(TOKEN_PICKLE_URL) == 0:
